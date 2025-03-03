@@ -4,9 +4,7 @@ packages <- c("tidyverse", "readxl", "janitor", "purrr")
 
 # Check if packages needed are installed, if they are then load, if not install
 for (package in packages) {
-    if (!require(package,
-        character.only = TRUE
-    )) {
+    if (!require(package, character.only = TRUE)) {
         install.packages(package)
         library(package, character.only = TRUE)
     }
@@ -18,7 +16,7 @@ file_paths <- list.files(path = "Prepared_Data/Pivot_Tables", pattern = "*.xlsx"
 sheet_names <- c("AirPollutants", "HeavyMetals", "POPs&PAHs", "ParticulateMatter")
 
 read_pivot_tables <- function(file_path) {
-    map_dfr(
+    purrr::map_dfr(
         sheet_names,
         ~ read_excel(file_path, sheet = .x, skip = 13) |> mutate(Source_Sheet = .x),
         .id = "Sheet_Index"
