@@ -170,4 +170,8 @@ for (page in 1:num_pages) {
 }
 
 # Save data ------------
-write_csv(historic_data, "Tidied_Data/historic_emissions_data.csv")
+
+# Split and save each reporting_year separately
+split(historic_data, historic_data$reporting_year) |>
+    purrr::iwalk(~ write.csv(.x, file = paste0("Tidied_Data/Pivot_Tables/historic_data_reporting_", .y, ".csv"), row.names = FALSE))
+
