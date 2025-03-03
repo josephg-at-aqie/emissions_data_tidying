@@ -15,6 +15,7 @@ for (package in packages) {
 file_paths <- list.files(path = "Prepared_Data/Pivot_Tables", pattern = "*.xlsx", full.names = TRUE)
 sheet_names <- c("AirPollutants", "HeavyMetals", "POPs&PAHs", "ParticulateMatter")
 
+# Function to read and combine all the pivot tables from one xlsx file
 read_pivot_tables <- function(file_path) {
     purrr::map_dfr(
         sheet_names,
@@ -25,14 +26,18 @@ read_pivot_tables <- function(file_path) {
 
 # Load and format data ------------
 
+# This code reads the sheets from all .xlsx files in Prepared_Data/Pivot_Tables and combines them.
+# The data is then converted to a longer formatted, and the values and column names are tidied.
 historic_data <- map_dfr(file_paths, read_pivot_tables, .id = "Year_Index") |>
+    # Convert the index variable for the different files into a variable storing the reporting year in the filename.
     mutate(Reporting_Year = as.numeric(gsub("\\D", "", basename(file_paths[as.numeric(Year_Index)])))) |>
+    # Remove the index variables.
     select(Reporting_Year, Source_Sheet, everything(), -Year_Index, -Sheet_Index) |>
     # Remove subtotal rows
     filter(!grepl("Total", Pollutant, ignore.case = TRUE)) |>
-    # Pivot longer (assuming years are column names)
+    # Pivot longer (combine the emissions from all years into one column)
     pivot_longer(
-        cols = matches("^\\d{4}$"),
+        cols = matches("^\\d{4}$"), # Matches any column who's title is a string of 4 numbers
         names_to = "year",
         values_to = "emission",
         values_drop_na = TRUE
@@ -62,11 +67,11 @@ historic_data <- map_dfr(file_paths, read_pivot_tables, .id = "Year_Index") |>
         TRUE ~ emission_unit # Keep everything else unchanged
     )) |>
     # Replace long hyphens with short hyphens in the source column
-    mutate(source_name = str_replace_all(source_name, "–", "-")) |> # Replace long hyphen with standard hyphen
-    # Add spaces to source_sheet
+    mutate(source_name = str_replace_all(source_name, "–", "-")) |>
+    # Add spaces to source_sheet which will be converted to pollutant group
     mutate(
         source_sheet = str_replace_all(source_sheet, "([a-z])([A-Z])", "\\1 \\2"),
-        source_sheet = str_replace_all(source_sheet, "([a-zA-Z])&([a-zA-Z])", "\\1 & \\2")
+        source_sheet = str_replace_all(source_sheet, "([a-zA-Z])&([a-zA-Z])", "\\1 & \\2") # Needed for POPs&PAHs
     ) |>
     # Rename columns for clarity
     rename(
@@ -79,8 +84,9 @@ historic_data <- map_dfr(file_paths, read_pivot_tables, .id = "Year_Index") |>
 
 # QA Checks ------------
 
+# This section provides a number of QA checks to be performed on the data.
+
 # Check data structure and column types
-glimpse(historic_data)
 str(historic_data)
 
 # Check for missing data
@@ -89,7 +95,6 @@ sum(complete.cases(historic_data)) == nrow(historic_data)
 historic_data |> filter(is.na(emission))
 
 # Check for duplicates
-sum(duplicated(historic_data))
 historic_data |> filter(duplicated(historic_data))
 
 # Check text columns for errors such as typos
@@ -99,7 +104,6 @@ unique(historic_data$unit)
 
 # Check for negative values in emissions
 historic_data |> filter(emission < 0)
-
 
 # Check years are consistent
 range(historic_data$year)
@@ -114,13 +118,13 @@ all_combinations <- expand.grid(
     pollutant = unique(historic_data$pollutant)
 )
 missing_combinations <- anti_join(all_combinations, historic_data, by = c("year", "pollutant"))
-view(missing_combinations) # Shows missing year-pollutant pairs
-# Looks like we reported the following pollutants from 1990-2014
-# Pentabromodiphenyl ether, Octabromodiphenyl
-# Looks like we reported Pyrene from 1982 onwards
+view(missing_combinations |> filter(year >= 1990)) # Shows missing year-pollutant pairs from 1990 onwards
+# Looks like we stopped reporting the following from 2015 onwards:
+# Pentabromodiphenyl ether, Octabromodiphenyl ether, Short Chain Chlorinated Paraffins (C10-13)
+# Also looks like we reported Pyrene from 1982 onwards.
 
 # Check for extreme values in emissions
-yearly_totals <- all_data |>
+yearly_totals <- historic_data |>
     group_by(year, pollutant) |>
     summarise(total_emission = sum(emission, na.rm = TRUE), .groups = "drop")
 extreme_values <- yearly_totals |>
@@ -148,9 +152,6 @@ print(outliers)
 if (!require("ggforce", character.only = TRUE)) {
     install.packages(ggforce)
 }
-yearly_totals <- all_data |>
-    group_by(year, pollutant) |>
-    summarise(total_emission = sum(emission, na.rm = TRUE), .groups = "drop")
 num_pollutants <- length(unique(yearly_totals$pollutant))
 num_pages <- ceiling(num_pollutants / 4) # 4 per page
 for (page in 1:num_pages) {
@@ -167,3 +168,6 @@ for (page in 1:num_pages) {
     print(p) # Display the plot
     Sys.sleep(0.5) # Small delay to help with rendering in some cases
 }
+
+# Save data ------------
+write_csv(historic_data, "Tidied_Data/historic_emissions_data.csv")
