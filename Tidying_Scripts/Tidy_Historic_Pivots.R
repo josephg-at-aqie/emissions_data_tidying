@@ -123,6 +123,14 @@ view(missing_combinations |> filter(year >= 1990)) # Shows missing year-pollutan
 # Pentabromodiphenyl ether, Octabromodiphenyl ether, Short Chain Chlorinated Paraffins (C10-13)
 # Also looks like we reported Pyrene from 1982 onwards.
 
+# Check missing pollutant-reporting_year pairs
+all_combinations <- expand.grid(
+    reporting_year = unique(projections_data$reporting_year),
+    pollutant = unique(projections_data$pollutant)
+)
+missing_combinations <- anti_join(all_combinations, projections_data, by = c("reporting_year", "pollutant"))
+view(missing_combinations)
+
 # Check for extreme values in emissions
 yearly_totals <- historic_data |>
     group_by(year, pollutant) |>
@@ -149,22 +157,27 @@ print(outliers)
 # It looks like there are quite a few outliers
 
 # Plot time series for each pollutant
+# Check if ggforce is installed
 if (!require("ggforce", character.only = TRUE)) {
-    install.packages(ggforce)
+    install.packages("ggforce")
 }
+yearly_totals <- historic_data |>
+    group_by(year, pollutant, reporting_year) |>
+    summarise(total_emission = sum(emission, na.rm = TRUE), .groups = "drop")
 num_pollutants <- length(unique(yearly_totals$pollutant))
 num_pages <- ceiling(num_pollutants / 4) # 4 per page
 for (page in 1:num_pages) {
-    p <- ggplot(yearly_totals, aes(x = year, y = total_emission, group = pollutant, color = pollutant)) +
+    p <- ggplot(yearly_totals, aes(x = year, y = total_emission, group = reporting_year, color = as.factor(reporting_year))) +
         geom_line() +
         geom_point() +
         ggforce::facet_wrap_paginate(~pollutant, scales = "free_y", ncol = 2, nrow = 2, page = page) +
         labs(
             title = paste("Total Emissions Over Time by Pollutant (Page", page, "of", num_pages, ")"),
-            x = "Year", y = "Total Emissions"
+            x = "Year", y = "Total Emissions",
+            color = "Reporting Year"
         ) +
-        theme_minimal() +
-        theme(legend.position = "none") # Hide legend for clarity
+        theme_minimal()
+
     print(p) # Display the plot
     Sys.sleep(0.5) # Small delay to help with rendering in some cases
 }
@@ -173,5 +186,10 @@ for (page in 1:num_pages) {
 
 # Split and save each reporting_year separately
 split(historic_data, historic_data$reporting_year) |>
-    purrr::iwalk(~ write.csv(.x, file = paste0("Tidied_Data/Pivot_Tables/historic_emissions_reporting_", .y, ".csv"), row.names = FALSE))
+    purrr::iwalk(~ write.csv(
+        .x,
+        file = paste0("Tidied_Data/Pivot_Tables/historic_emissions_reporting_", .y, ".csv"),
+        row.names = FALSE
+    ))
 
+# Also save by NFR ...
