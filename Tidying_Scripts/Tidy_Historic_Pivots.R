@@ -194,7 +194,10 @@ yearly_totals <- historic_data |>
 num_pollutants <- length(unique(yearly_totals$pollutant))
 num_pages <- ceiling(num_pollutants / 4) # 4 per page
 for (page in 1:num_pages) {
-    p <- ggplot(yearly_totals, aes(x = year, y = total_emission, group = reporting_year, color = as.factor(reporting_year))) +
+    p <- ggplot(
+        yearly_totals,
+        aes(x = year, y = total_emission, group = reporting_year, color = as.factor(reporting_year))
+    ) +
         geom_line() +
         geom_point() +
         ggforce::facet_wrap_paginate(~pollutant, scales = "free_y", ncol = 2, nrow = 2, page = page) +
