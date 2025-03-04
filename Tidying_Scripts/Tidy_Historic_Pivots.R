@@ -82,6 +82,32 @@ historic_data <- map_dfr(file_paths, read_pivot_tables, .id = "Year_Index") |>
         pollutant_group = source_sheet
     )
 
+# Add compliance totals ------------
+
+# NO2 - have to calculate no2_compliance to exclude agriculture
+no2 <- subset(historic_data, historic_data$pollutant == "Nitrogen Oxides as NO2")
+
+no2_comp <- no2 %>%
+    filter(!str_detect(nfr, "^3B|^3D")) %>%
+    mutate(pollutant = "Nitrogen Oxides as NO2 NECR")
+
+# VOC's - have to calculate voc_compliance to exclude agriculture
+voc <- subset(historic_data, historic_data$pollutant == "Non Methane VOC")
+
+voc_comp <- voc %>%
+    filter(!str_detect(nfr, "^3B|^3D")) %>%
+    mutate(pollutant = "Non Methane VOC NECR")
+
+# NH3
+nh3 <- subset(historic_data, historic_data$pollutant == "Ammonia")
+
+# NH3 NECR Compliance Total (adjusted total)
+nh3_comp <- nh3 %>%
+    filter(!str_detect(source, "Digestates - TAN")) %>% # Should be using 3Da2c
+    mutate(pollutant = "Ammonia NECR")
+
+historic_data <- rbind(historic_data, no2_comp, voc_comp, nh3_comp)
+
 # QA Checks ------------
 
 # This section provides a number of QA checks to be performed on the data.
@@ -125,11 +151,12 @@ view(missing_combinations |> filter(year >= 1990)) # Shows missing year-pollutan
 
 # Check missing pollutant-reporting_year pairs
 all_combinations <- expand.grid(
-    reporting_year = unique(projections_data$reporting_year),
-    pollutant = unique(projections_data$pollutant)
+    reporting_year = unique(historic_data$reporting_year),
+    pollutant = unique(historic_data$pollutant)
 )
-missing_combinations <- anti_join(all_combinations, projections_data, by = c("reporting_year", "pollutant"))
+missing_combinations <- anti_join(all_combinations, historic_data, by = c("reporting_year", "pollutant"))
 view(missing_combinations)
+# Notably we didn't report black carbon and methane till 2017
 
 # Check for extreme values in emissions
 yearly_totals <- historic_data |>
@@ -188,8 +215,19 @@ for (page in 1:num_pages) {
 split(historic_data, historic_data$reporting_year) |>
     purrr::iwalk(~ write.csv(
         .x,
-        file = paste0("Tidied_Data/Pivot_Tables/historic_emissions_reporting_", .y, ".csv"),
+        file = paste0("Tidied_Data/Historic_Emissions/historic_emissions_reporting_", .y, ".csv"),
         row.names = FALSE
     ))
 
-# Also save by NFR ...
+# Aggregate by NFR code (removing source and activity)
+historic_data_by_NFR <- historic_data |>
+    group_by(reporting_year, pollutant_group, pollutant, nfr, unit, year) |>
+    summarise(emission = sum(emission, na.rm = TRUE), .groups = "drop")
+
+# Save aggregated version by reporting year
+split(historic_data_by_NFR, historic_data_by_NFR$reporting_year) |>
+    purrr::iwalk(~ write.csv(
+        .x,
+        file = paste0("Tidied_Data/Historic_Emissions_by_NFR/historic_emissions_by_NFR_reporting_", .y, ".csv"),
+        row.names = FALSE
+    ))
