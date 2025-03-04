@@ -216,6 +216,6 @@ for (page in 1:num_pages) {
 split(projections_data, projections_data$reporting_year) |>
     purrr::iwalk(~ write.csv(
         .x,
-        file = paste0("Tidied_Data/Detailed_Projections/projected_emissions_by_NFR_reporting_", .y, ".csv"),
+        file = paste0("Tidied_Data/Projected_Emissions_by_NFR/projected_emissions_by_NFR_reporting_", .y, ".csv"),
         row.names = FALSE
     ))
